@@ -17,10 +17,10 @@ function formatDate(date) {
 function displaySpawnTimes(spawnTimes) {
     const currentTime = new Date();
     const timeList = document.getElementById('timeList');
-    timeList.innerHTML = ''; // 清空之前的列表
+    timeList.innerHTML = '';
     spawnTimes
-        .filter(time => time > currentTime) // 过滤掉当前时间之前的生成时间
-        .slice(0, 10) // 只显示后10个生成时间
+        .filter(time => time > currentTime)
+        .slice(0, 100)
         .forEach(time => {
             const listItem = document.createElement('li');
             listItem.textContent = formatDate(time);
@@ -34,6 +34,8 @@ function updateCurrentTime(spawnTimes) {
     const nextSpawnTimeElement = document.getElementById('nextSpawnTime');
     const progress = document.getElementById('progress');
     const currentTime = new Date();
+    const countdownCircle = document.getElementById('countdown-circle');
+    const countdownText = document.getElementById('countdown-text');
     currentTimeElement.textContent = formatDate(currentTime);
 
     const nextSpawnTimes = spawnTimes.filter(time => time > currentTime);
@@ -44,6 +46,7 @@ function updateCurrentTime(spawnTimes) {
         const seconds = Math.floor((timeDifference % 60000) / 1000);
         if (minutes <= tolerance) {
             progress.textContent = "May have started";
+            countdownCircle.style.stroke = "#ff2b75"
             if (minutes === 1) {
                 nextSpawnElement.textContent = `1 minute and ${seconds} seconds`;
             }
@@ -52,20 +55,30 @@ function updateCurrentTime(spawnTimes) {
             } else {
                 nextSpawnElement.textContent = `${minutes} minutes and ${seconds} seconds`;
             }
-        
         } 
         else if (minutes >= intervalMinutes - tolerance) {
+            countdownCircle.style.stroke = "#fd5013"
             nextSpawnElement.textContent = `${minutes} minutes and ${seconds} seconds`;
             progress.textContent = "May have started";
         }
         else {
+            countdownCircle.style.stroke = "#98e365"
             nextSpawnElement.textContent = `${minutes} minutes and ${seconds} seconds`;
             progress.textContent = "Idle";
         }
         nextSpawnTimeElement.textContent = formatDate(nextSpawnTime);
+        const totalSeconds = minutes * 60 + seconds;
+        const percentage = totalSeconds / (intervalMinutes * 60 + intervalSeconds);
+        const offset = 283 * (1 - percentage);
+        countdownCircle.style.strokeDashoffset = offset;
+        countdownText.textContent = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
     } else {
         nextSpawnElement.textContent = 'No upcoming spawns';
         nextSpawnTimeElement.textContent = 'N/A';
+        nextSpawnElement.textContent = 'No upcoming spawns';
+        nextSpawnTimeElement.textContent = 'N/A';
+        countdownCircle.style.strokeDashoffset = 283;
+        countdownText.textContent = '0:00';
     }
 }
 
@@ -74,7 +87,7 @@ const intervalMinutes = 78;
 const intervalSeconds = 52;
 const tolerance = 2;
 const intervalMilliseconds = (intervalMinutes * 60 + intervalSeconds) * 1000;
-const spawnTimes = calculateSpawnTimes(startTime, intervalMilliseconds, 100); // 计算足够多的生成时间
+const spawnTimes = calculateSpawnTimes(startTime, intervalMilliseconds, 100);
 
 displaySpawnTimes(spawnTimes);
 setInterval(() => updateCurrentTime(spawnTimes), 1000);

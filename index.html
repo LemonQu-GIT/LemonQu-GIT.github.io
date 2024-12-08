@@ -12,7 +12,7 @@
 <body>
     <div class="background"></div>
     <div class="container content">
-        <div>
+        <div class="spawn-time-container">
             <h1>Magic Firefly Spawn Time</h1>
             <ul class="time-list" id="timeList"></ul>
         </div>
@@ -29,11 +29,19 @@
                 <p id="nextSpawnTime"></p>
             </div>
         </div>
-
+        <div>
+            <h1>Countdown</h1>
+            <div class="countdown">
+                <svg>
+                    <circle r="45" cx="50" cy="50"></circle>
+                    <circle id="countdown-circle" r="45" cx="50" cy="50"></circle>
+                </svg>
+                <div id="countdown-text"></div>
+            </div>
+        </div>
     </div>
 
-    <script type="text/javascript" src="./script.js">
-    </script>
+    <script type="text/javascript" src="./script.js"></script>
 </body>
 
 </html>
