@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档扫描矫正工具</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>文档扫描矫正工具</h1>
+            <p>上传图片，拖拽四个定点到文档角，调整阈值进行黑白反色处理并下载。</p>
+        </header>
+
+        <section class="controls-panel">
+            <div class="file-upload">
+                <input type="file" id="imageUpload" accept="image/*" multiple>
+                <label for="imageUpload" class="btn">上传图片 (可选多张)</label>
+            </div>
+            
+            <div id="imageNav" class="image-nav" style="display: none;">
+                <button id="prevBtn" class="btn-icon">上一张</button>
+                <span id="imageCounter">0 / 0</span>
+                <button id="nextBtn" class="btn-icon">下一张</button>
+            </div>
+        </section>
+
+        <section class="main-workspace" id="workspace" style="display: none;">
+            <div class="editor-panel">
+                <h3>原图拖拽区域</h3>
+                <p class="tip">拖拽四个圆点到文档的四个角</p>
+                <div class="canvas-container">
+                    <canvas id="sourceCanvas"></canvas>
+                </div>
+            </div>
+
+            <div class="preview-panel">
+                <h3>处理效果</h3>
+                <div class="settings">
+                    <label for="thresholdSlider">黑点阈值 (调整重色程度): <span id="thresholdValue">68</span></label>
+                    <input type="range" id="thresholdSlider" min="0" max="255" value="68">
+                    
+                    <div class="actions">
+                        <button id="processBtn" class="btn primary">处理图片</button>
+                        <button id="downloadBtn" class="btn success" disabled>下载此图</button>
+                        <button id="downloadAllBtn" class="btn success" disabled>下载全部</button>
+                    </div>
+                    <p class="tip" style="margin-top: 10px; color: #d84315; font-weight: bold;">💡 手机端小技巧：处理完成后，可直接长按下方图片保存到相册哦</p>
+                </div>
+                <div class="canvas-container">
+                    <canvas id="resultCanvas" style="display: none;"></canvas>
+                    <img id="resultImage" style="max-width: 100%; height: auto; object-fit: contain; display: none; cursor: crosshair;" alt="处理后的图片">
+                </div>
+            </div>
+        </section>
+        
+        <div id="loadingOverlay" class="loading-overlay">
+            <div class="loader">正在加载 OpenCV.js...</div>
+        </div>
+    </div>
+
+    <script src="piexif.min.js"></script>
+    <script async src="opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
+    <script src="script.js"></script>
+</body>
+</html>
