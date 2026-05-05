@@ -9,6 +9,8 @@ const resultImage = document.getElementById("resultImage");
 const processBtn = document.getElementById("processBtn");
 const downloadBtn = document.getElementById("downloadBtn");
 const downloadAllBtn = document.getElementById("downloadAllBtn");
+const downloadPdfBtn = document.getElementById("downloadPdfBtn");
+const batchPdfBtn = document.getElementById("batchPdfBtn");
 const thresholdSlider = document.getElementById("thresholdSlider");
 const thresholdValueLabel = document.getElementById("thresholdValue");
 const imageNav = document.getElementById("imageNav");
@@ -16,6 +18,8 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const imageCounter = document.getElementById("imageCounter");
 const loadingOverlay = document.getElementById("loadingOverlay");
+const thumbnailPanel = document.getElementById("thumbnailPanel");
+const thumbnailContainer = document.getElementById("thumbnailContainer");
 
 let ctxSrc = sourceCanvas.getContext("2d");
 let ctxRes = resultCanvas.getContext("2d");
@@ -43,6 +47,7 @@ imageUpload.addEventListener("change", (e) => {
   currentIndex = 0;
 
   workspace.style.display = "flex";
+  thumbnailPanel.style.display = "block";
   if (files.length > 1) {
     imageNav.style.display = "flex";
   } else {
@@ -58,6 +63,7 @@ imageUpload.addEventListener("change", (e) => {
         images[index] = { file: file, img: img, processedDataUrl: null };
         loadedCount++;
         if (loadedCount === files.length) {
+          renderThumbnails();
           loadImageIndex(currentIndex);
         }
       };
@@ -82,9 +88,9 @@ function loadImageIndex(index) {
   sourceCanvas.height = canvasHeight;
   ctxSrc.drawImage(img, 0, 0);
 
-  // Initial Corners (10% padding)
-  const padX = canvasWidth * 0.1;
-  const padY = canvasHeight * 0.1;
+  // Initial Corners (no padding)
+  const padX = 0;
+  const padY = 0;
 
   corners = [
     { x: padX, y: padY }, // Top-Left
@@ -101,6 +107,252 @@ function loadImageIndex(index) {
     resultImage.style.display = "none";
     resultImage.src = "";
   }
+
+  if (typeof updateThumbnailSelection === "function") {
+    updateThumbnailSelection();
+  }
+}
+
+// Thumbnails and Drag/Drop Reordering
+let draggedThumbIndex = -1;
+
+function renderThumbnails() {
+  thumbnailContainer.innerHTML = "";
+  images.forEach((imgData, index) => {
+    const thumb = document.createElement("div");
+    thumb.className = "thumbnail-item";
+    if (index === currentIndex) thumb.classList.add("active");
+    thumb.draggable = true;
+    thumb.dataset.index = index;
+
+    const img = document.createElement("img");
+    img.src = imgData.processedDataUrl || imgData.img.src;
+
+    const label = document.createElement("div");
+    label.className = "thumbnail-index";
+    label.textContent = index + 1;
+
+    thumb.appendChild(img);
+    thumb.appendChild(label);
+
+    thumb.addEventListener("click", () => loadImageIndex(index));
+    thumb.addEventListener("dragstart", handleThumbDragStart);
+    thumb.addEventListener("dragover", handleThumbDragOver);
+    thumb.addEventListener("dragenter", handleThumbDragEnter);
+    thumb.addEventListener("dragleave", handleThumbDragLeave);
+    thumb.addEventListener("drop", handleThumbDrop);
+    thumb.addEventListener("dragend", handleThumbDragEnd);
+
+    // Touch events for mobile
+    thumb.addEventListener("touchstart", handleThumbTouchStart, {
+      passive: false,
+    });
+    thumb.addEventListener("touchmove", handleThumbTouchMove, {
+      passive: false,
+    });
+    thumb.addEventListener("touchend", handleThumbTouchEnd);
+    thumb.addEventListener("touchcancel", handleThumbTouchEnd);
+
+    thumbnailContainer.appendChild(thumb);
+  });
+}
+
+function updateThumbnailSelection() {
+  const thumbs = thumbnailContainer.querySelectorAll(".thumbnail-item");
+  thumbs.forEach((t, index) => {
+    if (index === currentIndex) {
+      t.classList.add("active");
+      t.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "nearest",
+      });
+    } else {
+      t.classList.remove("active");
+    }
+  });
+}
+
+function handleThumbDragStart(e) {
+  draggedThumbIndex = parseInt(e.currentTarget.dataset.index);
+  e.dataTransfer.effectAllowed = "move";
+  e.currentTarget.classList.add("dragging");
+}
+
+function handleThumbDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  return false;
+}
+
+function handleThumbDragEnter(e) {
+  e.preventDefault();
+  e.currentTarget.style.transform = "scale(1.05)";
+}
+
+function handleThumbDragLeave(e) {
+  e.currentTarget.style.transform = "scale(1)";
+}
+
+function handleThumbDrop(e) {
+  e.stopPropagation();
+  const targetIndex = parseInt(e.currentTarget.dataset.index);
+  if (draggedThumbIndex !== -1 && draggedThumbIndex !== targetIndex) {
+    const draggedItem = images.splice(draggedThumbIndex, 1)[0];
+    images.splice(targetIndex, 0, draggedItem);
+
+    if (currentIndex === draggedThumbIndex) {
+      currentIndex = targetIndex;
+    } else if (
+      currentIndex > draggedThumbIndex &&
+      currentIndex <= targetIndex
+    ) {
+      currentIndex--;
+    } else if (
+      currentIndex < draggedThumbIndex &&
+      currentIndex >= targetIndex
+    ) {
+      currentIndex++;
+    }
+
+    renderThumbnails();
+    loadImageIndex(currentIndex);
+  }
+}
+
+function handleThumbDragEnd(e) {
+  draggedThumbIndex = -1;
+  const thumbs = thumbnailContainer.querySelectorAll(".thumbnail-item");
+  thumbs.forEach((t) => {
+    t.classList.remove("dragging");
+    t.style.transform = "scale(1)";
+  });
+}
+
+// Mobile touch handlers
+let touchClone = null;
+let touchOffsetX = 0;
+let touchOffsetY = 0;
+let touchMoved = false;
+
+function handleThumbTouchStart(e) {
+  if (e.touches.length > 1) return;
+  draggedThumbIndex = parseInt(e.currentTarget.dataset.index);
+  touchMoved = false;
+
+  const touch = e.touches[0];
+  const rect = e.currentTarget.getBoundingClientRect();
+  touchOffsetX = touch.clientX - rect.left;
+  touchOffsetY = touch.clientY - rect.top;
+
+  e.currentTarget.classList.add("dragging");
+
+  // Delay clone creation to allow simple clicks
+  setTimeout(() => {
+    if (
+      draggedThumbIndex === parseInt(e.currentTarget.dataset.index) &&
+      e.currentTarget.classList.contains("dragging")
+    ) {
+      createTouchClone(e.currentTarget, touch.clientX, touch.clientY);
+    }
+  }, 150);
+}
+
+function createTouchClone(target, clientX, clientY) {
+  if (touchClone) return;
+  const rect = target.getBoundingClientRect();
+  touchClone = target.cloneNode(true);
+  touchClone.style.position = "fixed";
+  touchClone.style.zIndex = "2000";
+  touchClone.style.opacity = "0.8";
+  touchClone.style.pointerEvents = "none";
+  touchClone.style.left = clientX - touchOffsetX + "px";
+  touchClone.style.top = clientY - touchOffsetY + "px";
+  touchClone.style.width = rect.width + "px";
+  touchClone.style.height = rect.height + "px";
+  touchClone.style.margin = "0";
+  document.body.appendChild(touchClone);
+}
+
+function handleThumbTouchMove(e) {
+  if (draggedThumbIndex === -1) return;
+  touchMoved = true;
+  e.preventDefault(); // Prevent scrolling
+
+  const touch = e.touches[0];
+  if (!touchClone && e.currentTarget.classList.contains("dragging")) {
+    createTouchClone(e.currentTarget, touch.clientX, touch.clientY);
+  }
+
+  if (touchClone) {
+    touchClone.style.left = touch.clientX - touchOffsetX + "px";
+    touchClone.style.top = touch.clientY - touchOffsetY + "px";
+  }
+
+  const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+  const targetElem = elements.find(
+    (el) =>
+      el.classList.contains("thumbnail-item") &&
+      !el.classList.contains("dragging"),
+  );
+
+  const thumbs = thumbnailContainer.querySelectorAll(".thumbnail-item");
+  thumbs.forEach((t) => {
+    if (!t.classList.contains("dragging")) t.style.transform = "scale(1)";
+  });
+
+  if (targetElem) {
+    targetElem.style.transform = "scale(1.05)";
+  }
+}
+
+function handleThumbTouchEnd(e) {
+  if (draggedThumbIndex !== -1 && touchMoved) {
+    const touch = e.changedTouches[0];
+    const elements = document.elementsFromPoint(touch.clientX, touch.clientY);
+    const targetElem = elements.find(
+      (el) =>
+        el.classList.contains("thumbnail-item") &&
+        !el.classList.contains("dragging"),
+    );
+
+    if (targetElem) {
+      const targetIndex = parseInt(targetElem.dataset.index);
+      if (draggedThumbIndex !== targetIndex) {
+        const draggedItem = images.splice(draggedThumbIndex, 1)[0];
+        images.splice(targetIndex, 0, draggedItem);
+
+        if (currentIndex === draggedThumbIndex) {
+          currentIndex = targetIndex;
+        } else if (
+          currentIndex > draggedThumbIndex &&
+          currentIndex <= targetIndex
+        ) {
+          currentIndex--;
+        } else if (
+          currentIndex < draggedThumbIndex &&
+          currentIndex >= targetIndex
+        ) {
+          currentIndex++;
+        }
+
+        renderThumbnails();
+        loadImageIndex(currentIndex);
+      }
+    }
+  }
+
+  // Cleanup
+  if (touchClone) {
+    touchClone.remove();
+    touchClone = null;
+  }
+  draggedThumbIndex = -1;
+  const thumbs = thumbnailContainer.querySelectorAll(".thumbnail-item");
+  thumbs.forEach((t) => {
+    t.classList.remove("dragging");
+    t.style.transform = "scale(1)";
+  });
 }
 
 // Navigation
@@ -346,6 +598,13 @@ processBtn.addEventListener("click", () => {
 
   images[currentIndex].processedDataUrl = dataUrl;
 
+  // Update thumbnail view to reflect processed preview
+  const thumbs = thumbnailContainer.querySelectorAll(".thumbnail-item");
+  if (thumbs[currentIndex]) {
+    const imgEl = thumbs[currentIndex].querySelector("img");
+    if (imgEl) imgEl.src = dataUrl;
+  }
+
   // Show image via <img> tag so iOS/Android users can long-press to save
   resultImage.src = dataUrl;
   resultImage.style.display = "block";
@@ -353,7 +612,10 @@ processBtn.addEventListener("click", () => {
   downloadBtn.disabled = false;
 
   let allProcessed = images.every((im) => im.processedDataUrl !== null);
-  if (allProcessed) downloadAllBtn.disabled = false;
+  if (allProcessed) {
+    downloadAllBtn.disabled = false;
+    downloadPdfBtn.disabled = false;
+  }
 
   // Cleanup
   srcMat.delete();
@@ -389,6 +651,116 @@ downloadAllBtn.addEventListener("click", () => {
   });
 });
 
+downloadPdfBtn.addEventListener("click", () => {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF("p", "pt", "a4");
+  const pdfWidth = pdf.internal.pageSize.getWidth();
+  const pdfHeight = pdf.internal.pageSize.getHeight();
+
+  images.forEach((imgData, index) => {
+    if (imgData.processedDataUrl) {
+      if (index > 0) pdf.addPage();
+
+      const img = new Image();
+      img.src = imgData.processedDataUrl;
+
+      // Calculate aspect ratio
+      const imgRatio = img.width / img.height;
+      const pdfRatio = pdfWidth / pdfHeight;
+
+      let finalWidth, finalHeight;
+      if (imgRatio > pdfRatio) {
+        finalWidth = pdfWidth;
+        finalHeight = pdfWidth / imgRatio;
+      } else {
+        finalHeight = pdfHeight;
+        finalWidth = pdfHeight * imgRatio;
+      }
+
+      // Center the image
+      const x = (pdfWidth - finalWidth) / 2;
+      const y = (pdfHeight - finalHeight) / 2;
+
+      pdf.addImage(
+        imgData.processedDataUrl,
+        "JPEG",
+        x,
+        y,
+        finalWidth,
+        finalHeight,
+      );
+    }
+  });
+
+  pdf.save("scanned-documents.pdf");
+});
+batchPdfBtn.addEventListener("click", () => {
+  if (!cvReady || images.length === 0) return;
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF("p", "pt", "a4");
+  const pdfWidth = pdf.internal.pageSize.getWidth();
+  const pdfHeight = pdf.internal.pageSize.getHeight();
+
+  let thresholdVal = parseInt(thresholdSlider.value);
+
+  images.forEach((imgData, index) => {
+    const img = imgData.img;
+    let srcMat = cv.imread(img);
+
+    // For batch process, if the user hasn't dragged corners for this specific image,
+    // we assume we take the full image bounds.
+    // To simplify, we just use the full image bounds for batch process,
+    // or if they want the exact dragged corners, they should use the current manual process then click "合并下载为PDF".
+    // For this button, we'll assume they want the full image with the current threshold.
+    let maxWidth = img.width;
+    let maxHeight = img.height;
+
+    let grayMat = new cv.Mat();
+    cv.cvtColor(srcMat, grayMat, cv.COLOR_RGBA2GRAY);
+
+    let enhancedMat = new cv.Mat();
+    let alpha = 5.0;
+    let beta = -(thresholdVal * alpha);
+    cv.convertScaleAbs(grayMat, enhancedMat, alpha, beta);
+
+    let invertedMat = new cv.Mat();
+    cv.bitwise_not(enhancedMat, invertedMat);
+
+    // Use an offscreen canvas to get the data url
+    let offCanvas = document.createElement("canvas");
+    offCanvas.width = maxWidth;
+    offCanvas.height = maxHeight;
+    cv.imshow(offCanvas, invertedMat);
+    let dataUrl = offCanvas.toDataURL("image/jpeg", 0.95);
+
+    if (index > 0) pdf.addPage();
+
+    // Calculate aspect ratio
+    const imgRatio = maxWidth / maxHeight;
+    const pdfRatio = pdfWidth / pdfHeight;
+
+    let finalWidth, finalHeight;
+    if (imgRatio > pdfRatio) {
+      finalWidth = pdfWidth;
+      finalHeight = pdfWidth / imgRatio;
+    } else {
+      finalHeight = pdfHeight;
+      finalWidth = pdfHeight * imgRatio;
+    }
+
+    const x = (pdfWidth - finalWidth) / 2;
+    const y = (pdfHeight - finalHeight) / 2;
+
+    pdf.addImage(dataUrl, "JPEG", x, y, finalWidth, finalHeight);
+
+    srcMat.delete();
+    grayMat.delete();
+    enhancedMat.delete();
+    invertedMat.delete();
+  });
+
+  pdf.save("batch-scanned-documents.pdf");
+});
 function dataURItoBlob(dataURI) {
   const byteString = atob(dataURI.split(",")[1]);
   const mimeString = dataURI.split(",")[0].split(":")[1].split(";")[0];
